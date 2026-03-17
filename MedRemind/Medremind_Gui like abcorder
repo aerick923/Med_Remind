@@ -1,0 +1,173 @@
+from tkinter import *
+
+# -----------------------------
+# DATA
+# -----------------------------
+users = {"admin": "1234"}
+medications = []
+appointments = []
+
+current_user = ""
+
+# -----------------------------
+# MAIN WINDOW
+# -----------------------------
+root = Tk()
+root.geometry("600x400")
+root.title("MedRemind")
+
+# -----------------------------
+# UTIL
+# -----------------------------
+def clear():
+    for widget in root.winfo_children():
+        widget.destroy()
+
+# -----------------------------
+# LOGIN SCREEN → login()
+# -----------------------------
+def login():
+    clear()
+
+    Label(root, text="LOGIN", font=("Arial", 16)).pack(pady=20)
+
+    username = Entry(root)
+    username.pack(pady=5)
+    username.insert(0, "Username")
+
+    password = Entry(root, show="*")
+    password.pack(pady=5)
+    password.insert(0, "Password")
+
+    def do_login():
+        global current_user
+        user = username.get()
+        pwd = password.get()
+
+        if user in users and users[user] == pwd:
+            current_user = user
+            home()
+        else:
+            Label(root, text="Invalid Login", fg="red").pack()
+
+    Button(root, text="Login", command=do_login).pack(pady=10)
+    Button(root, text="Sign Up", command=signup).pack()
+
+# -----------------------------
+# SIGN UP → signup()
+# -----------------------------
+def signup():
+    clear()
+
+    Label(root, text="SIGN UP", font=("Arial", 16)).pack(pady=20)
+
+    username = Entry(root)
+    username.pack(pady=5)
+    username.insert(0, "New Username")
+
+    password = Entry(root)
+    password.pack(pady=5)
+    password.insert(0, "New Password")
+
+    def register():
+        users[username.get()] = password.get()
+        Label(root, text="Account Created!", fg="green").pack()
+
+    Button(root, text="Create Account", command=register).pack(pady=10)
+    Button(root, text="Back to Login", command=login).pack()
+
+# -----------------------------
+# DASHBOARD → home()
+# -----------------------------
+def home():
+    clear()
+
+    Label(root, text=f"Welcome {current_user}", font=("Arial", 14)).pack(pady=20)
+
+    Button(root, text="Medications", width=20,
+           command=manage_medications).pack(pady=5)
+
+    Button(root, text="Appointments", width=20,
+           command=manage_appointments).pack(pady=5)
+
+    Button(root, text="Profile", width=20,
+           command=profile).pack(pady=5)
+
+    Button(root, text="Logout", width=20,
+           command=login).pack(pady=20)
+
+# -----------------------------
+# MEDICATIONS → manage_medications()
+# -----------------------------
+def manage_medications():
+    clear()
+
+    Label(root, text="MEDICATION TRACKER", font=("Arial", 14)).pack(pady=20)
+
+    name = Entry(root)
+    name.pack(pady=5)
+    name.insert(0, "Medicine Name")
+
+    time = Entry(root)
+    time.pack(pady=5)
+    time.insert(0, "Time")
+
+    def add():
+        medications.append((name.get(), time.get()))
+        Label(root, text="Added!", fg="green").pack()
+
+    Button(root, text="Add Medication", command=add).pack(pady=10)
+
+    Label(root, text="Your Medications:").pack()
+    for med in medications:
+        Label(root, text=f"{med[0]} - {med[1]}").pack()
+
+    Button(root, text="Back", command=home).pack(pady=10)
+
+# -----------------------------
+# APPOINTMENTS → manage_appointments()
+# -----------------------------
+def manage_appointments():
+    clear()
+
+    Label(root, text="APPOINTMENTS", font=("Arial", 14)).pack(pady=20)
+
+    doctor = Entry(root)
+    doctor.pack(pady=5)
+    doctor.insert(0, "Doctor Name")
+
+    date = Entry(root)
+    date.pack(pady=5)
+    date.insert(0, "Date")
+
+    def add():
+        appointments.append((doctor.get(), date.get()))
+        Label(root, text="Appointment Added!", fg="green").pack()
+
+    Button(root, text="Add Appointment", command=add).pack(pady=10)
+
+    Label(root, text="Your Appointments:").pack()
+    for app in appointments:
+        Label(root, text=f"Dr. {app[0]} - {app[1]}").pack()
+
+    Button(root, text="Back", command=home).pack(pady=10)
+
+# -----------------------------
+# PROFILE → profile()
+# -----------------------------
+def profile():
+    clear()
+
+    Label(root, text="PROFILE", font=("Arial", 14)).pack(pady=20)
+
+    Label(root, text=f"Username: {current_user}").pack()
+    Label(root, text="Status: Patient").pack()
+
+    Button(root, text="Back", command=home).pack(pady=20)
+
+# -----------------------------
+# START APP
+# -----------------------------
+login()
+
+root.mainloop()
