@@ -1,0 +1,185 @@
+import os
+
+# -----------------------------
+# SAMPLE DATA
+# -----------------------------
+users = {"admin": "1234"}
+appointments = []
+medications = []
+
+current_user = None  # GLOBAL
+
+# -----------------------------
+# UTIL FUNCTIONS
+# -----------------------------
+def clear():
+    os.system("cls" if os.name == "nt" else "clear")
+
+def line():
+    print("=" * 40)
+
+# -----------------------------
+# AUTH SCREENS
+# -----------------------------
+def login():
+    global current_user
+    clear()
+    line()
+    print("        MEDREMIND LOGIN")
+    line()
+    username = input("Username: ")
+    password = input("Password: ")
+
+    if username in users and users[username] == password:
+        current_user = username
+        print("\nLogin successful!")
+    else:
+        print("\nInvalid credentials.")
+    input("Press Enter...")
+
+def signup():
+    clear()
+    line()
+    print("        SIGN UP")
+    line()
+    username = input("Choose username: ")
+    password = input("Choose password: ")
+
+    users[username] = password
+    print("\nAccount created successfully!")
+    input("Press Enter...")
+
+# -----------------------------
+# HOME DASHBOARD
+# -----------------------------
+def home():
+    clear()
+    line()
+    print(f"Welcome, {current_user}")
+    print("MedRemind Dashboard")
+    line()
+    print("1. Medications")
+    print("2. Appointments")
+    print("3. Profile")
+    print("4. Logout")
+
+    choice = input("Select option: ")
+
+    if choice == "1":
+        manage_medications()
+    elif choice == "2":
+        manage_appointments()
+    elif choice == "3":
+        profile()
+    elif choice == "4":
+        return False
+    return True
+
+# -----------------------------
+# MEDICATION MANAGEMENT
+# -----------------------------
+def manage_medications():
+    clear()
+    line()
+    print("MEDICATION MANAGER")
+    line()
+    print("1. Add Medication")
+    print("2. View Medications")
+    print("3. Back")
+
+    choice = input("Choice: ")
+
+    if choice == "1":
+        name = input("Medicine name: ")
+        time = input("Time: ")
+        medications.append((name, time))
+        print("Added successfully!")
+
+    elif choice == "2":
+        line()
+        print("Your Medications:")
+        for med in medications:
+            print(f"- {med[0]} at {med[1]}")
+
+    input("Press Enter...")
+
+# -----------------------------
+# APPOINTMENTS
+# -----------------------------
+def manage_appointments():
+    clear()
+    line()
+    print("APPOINTMENTS")
+    line()
+    print("1. Add Appointment")
+    print("2. View Appointments")
+    print("3. Back")
+
+    choice = input("Choice: ")
+
+    if choice == "1":
+        doctor = input("Doctor name: ")
+        date = input("Date: ")
+        time = input("Time: ")
+        appointments.append((doctor, date, time))
+        print("Appointment added!")
+
+    elif choice == "2":
+        line()
+        print("Appointments:")
+        for app in appointments:
+            print(f"- Dr. {app[0]} on {app[1]} at {app[2]}")
+
+    input("Press Enter...")
+
+# -----------------------------
+# PROFILE
+# -----------------------------
+def profile():
+    clear()
+    line()
+    print("PROFILE")
+    line()
+    print(f"Username: {current_user}")
+    print("Status: Patient")
+    input("\nPress Enter...")
+
+# -----------------------------
+# MAIN APP LOOP
+# -----------------------------
+def main():
+    global current_user   # ✅ IMPORTANT
+
+    while True:
+        clear()
+        line()
+        print("       MEDREMIND SYSTEM")
+        line()
+        print("1. Login")
+        print("2. Sign Up")
+        print("3. Exit")
+
+        choice = input("Select: ")
+
+        if choice == "1":
+            login()
+            if current_user:
+                while home():
+                    pass
+                current_user = None
+
+        elif choice == "2":
+            signup()
+
+        elif choice == "3":
+            print("Goodbye!")
+            break
+
+        else:
+            print("Invalid choice!")
+            input("Press Enter...")
+
+# -----------------------------
+# RUN APP
+# -----------------------------
+main()
