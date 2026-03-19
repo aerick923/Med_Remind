@@ -1,0 +1,890 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import mysql.connector
+from mysql.connector import Error
+from datetime import datetime
+
+# =========================================================
+# DATABASE CONFIG
+# =========================================================
+DB_CONFIG = {
+    "host": "localhost",
+    "user": "root",
+    "password": "",
+    "database": "medremind_db"
+}
+
+# =========================================================
+# DB LAYER
+# =========================================================
+def get_connection():
+    return mysql.connector.connect(**DB_CONFIG)
+
+def initialize_database():
+    conn = None
+    cursor = None
+    try:
+        # connect without database first if needed
+        temp_config = DB_CONFIG.copy()
+        db_name = temp_config.pop("database")
+        conn = mysql.connector.connect(**temp_config)
+        cursor = conn.cursor()
+
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
+        cursor.execute(f"USE {db_name}")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL UNIQUE,
+                password VARCHAR(255) NOT NULL,
+                full_name VARCHAR(100) NOT NULL,
+                age INT DEFAULT NULL,
+                gender VARCHAR(20) DEFAULT NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS medications (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                medicine_name VARCHAR(100) NOT NULL,
+                dosage VARCHAR(100) NOT NULL,
+                med_time VARCHAR(50) NOT NULL,
+                instructions VARCHAR(255) DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS appointments (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                doctor_name VARCHAR(100) NOT NULL,
+                clinic VARCHAR(100) NOT NULL,
+                app_date VARCHAR(30) NOT NULL,
+                app_time VARCHAR(30) NOT NULL,
+                purpose VARCHAR(255) DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+
+        conn.commit()
+    except Error as e:
+        messagebox.showerror("Database Error", f"Failed to initialize database.\n{e}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def create_user(username, password, full_name, age, gender):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        sql = """
+            INSERT INTO users (username, password, full_name, age, gender)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        cursor.execute(sql, (username, password, full_name, age, gender))
+        conn.commit()
+        return True, "Account created successfully."
+    except mysql.connector.IntegrityError:
+        return False, "Username already exists."
+    except Error as e:
+        return False, str(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def authenticate_user(username, password):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        sql = "SELECT * FROM users WHERE username = %s AND password = %s"
+        cursor.execute(sql, (username, password))
+        user = cursor.fetchone()
+        return user
+    except Error as e:
+        messagebox.showerror("Database Error", str(e))
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_user_by_id(user_id):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        return cursor.fetchone()
+    except Error as e:
+        messagebox.showerror("Database Error", str(e))
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# -------------------- MEDICATION CRUD --------------------
+def add_medication_db(user_id, medicine_name, dosage, med_time, instructions):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        sql = """
+            INSERT INTO medications (user_id, medicine_name, dosage, med_time, instructions)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        cursor.execute(sql, (user_id, medicine_name, dosage, med_time, instructions))
+        conn.commit()
+        return True, "Medication added."
+    except Error as e:
+        return False, str(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_medications_db(user_id):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        sql = """
+            SELECT id, medicine_name, dosage, med_time, instructions
+            FROM medications
+            WHERE user_id = %s
+            ORDER BY id DESC
+        """
+        cursor.execute(sql, (user_id,))
+        return cursor.fetchall()
+    except Error as e:
+        messagebox.showerror("Database Error", str(e))
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def update_medication_db(med_id, medicine_name, dosage, med_time, instructions):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        sql = """
+            UPDATE medications
+            SET medicine_name = %s, dosage = %s, med_time = %s, instructions = %s
+            WHERE id = %s
+        """
+        cursor.execute(sql, (medicine_name, dosage, med_time, instructions, med_id))
+        conn.commit()
+        return True, "Medication updated."
+    except Error as e:
+        return False, str(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def delete_medication_db(med_id):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM medications WHERE id = %s", (med_id,))
+        conn.commit()
+        return True, "Medication deleted."
+    except Error as e:
+        return False, str(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# -------------------- APPOINTMENT CRUD --------------------
+def add_appointment_db(user_id, doctor_name, clinic, app_date, app_time, purpose):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        sql = """
+            INSERT INTO appointments (user_id, doctor_name, clinic, app_date, app_time, purpose)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(sql, (user_id, doctor_name, clinic, app_date, app_time, purpose))
+        conn.commit()
+        return True, "Appointment added."
+    except Error as e:
+        return False, str(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def get_appointments_db(user_id):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        sql = """
+            SELECT id, doctor_name, clinic, app_date, app_time, purpose
+            FROM appointments
+            WHERE user_id = %s
+            ORDER BY id DESC
+        """
+        cursor.execute(sql, (user_id,))
+        return cursor.fetchall()
+    except Error as e:
+        messagebox.showerror("Database Error", str(e))
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def update_appointment_db(app_id, doctor_name, clinic, app_date, app_time, purpose):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        sql = """
+            UPDATE appointments
+            SET doctor_name = %s, clinic = %s, app_date = %s, app_time = %s, purpose = %s
+            WHERE id = %s
+        """
+        cursor.execute(sql, (doctor_name, clinic, app_date, app_time, purpose, app_id))
+        conn.commit()
+        return True, "Appointment updated."
+    except Error as e:
+        return False, str(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def delete_appointment_db(app_id):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM appointments WHERE id = %s", (app_id,))
+        conn.commit()
+        return True, "Appointment deleted."
+    except Error as e:
+        return False, str(e)
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# =========================================================
+# GUI
+# =========================================================
+BG_COLOR = "#d8ebc2"
+CARD_COLOR = "#b7d98f"
+BTN_COLOR = "#6ea44c"
+BTN_TEXT = "white"
+HEADER_COLOR = "#2f4f2f"
+
+root = tk.Tk()
+root.title("MedRemind")
+root.geometry("900x600")
+root.config(bg=BG_COLOR)
+root.resizable(False, False)
+
+current_user = None
+
+def clear():
+    for widget in root.winfo_children():
+        widget.destroy()
+
+def make_title(text):
+    tk.Label(
+        root,
+        text=text,
+        font=("Arial", 22, "bold"),
+        bg=BG_COLOR,
+        fg=HEADER_COLOR
+    ).pack(pady=15)
+
+def make_button(parent, text, command, width=18):
+    return tk.Button(
+        parent,
+        text=text,
+        command=command,
+        width=width,
+        bg=BTN_COLOR,
+        fg=BTN_TEXT,
+        font=("Arial", 11, "bold"),
+        relief="flat",
+        cursor="hand2"
+    )
+
+# =========================================================
+# LOGIN SCREEN -> login()
+# =========================================================
+def login():
+    clear()
+    make_title("MedRemind Login")
+
+    card = tk.Frame(root, bg=CARD_COLOR, padx=30, pady=30)
+    card.pack(pady=30)
+
+    tk.Label(card, text="Username", font=("Arial", 12), bg=CARD_COLOR).grid(row=0, column=0, sticky="w", pady=8)
+    username_entry = tk.Entry(card, font=("Arial", 12), width=28)
+    username_entry.grid(row=0, column=1, pady=8)
+
+    tk.Label(card, text="Password", font=("Arial", 12), bg=CARD_COLOR).grid(row=1, column=0, sticky="w", pady=8)
+    password_entry = tk.Entry(card, font=("Arial", 12), width=28, show="*")
+    password_entry.grid(row=1, column=1, pady=8)
+
+    feedback_label = tk.Label(card, text="", font=("Arial", 10), bg=CARD_COLOR, fg="red")
+    feedback_label.grid(row=2, column=0, columnspan=2, pady=5)
+
+    def do_login():
+        global current_user
+        username = username_entry.get().strip()
+        password = password_entry.get().strip()
+
+        if not username or not password:
+            feedback_label.config(text="Please enter username and password.")
+            return
+
+        user = authenticate_user(username, password)
+        if user:
+            current_user = user
+            home()
+        else:
+            feedback_label.config(text="Invalid username or password.")
+
+    btn_frame = tk.Frame(card, bg=CARD_COLOR)
+    btn_frame.grid(row=3, column=0, columnspan=2, pady=15)
+
+    make_button(btn_frame, "Login", do_login).grid(row=0, column=0, padx=8)
+    make_button(btn_frame, "Sign Up", signup).grid(row=0, column=1, padx=8)
+
+# =========================================================
+# SIGNUP SCREEN -> signup()
+# =========================================================
+def signup():
+    clear()
+    make_title("Create Account")
+
+    card = tk.Frame(root, bg=CARD_COLOR, padx=30, pady=30)
+    card.pack(pady=20)
+
+    labels = ["Full Name", "Age", "Gender", "Username", "Password"]
+    entries = {}
+
+    for i, label_text in enumerate(labels):
+        tk.Label(card, text=label_text, font=("Arial", 12), bg=CARD_COLOR).grid(row=i, column=0, sticky="w", pady=8)
+
+        if label_text == "Gender":
+            gender_cb = ttk.Combobox(card, values=["Male", "Female", "Other"], state="readonly", width=26)
+            gender_cb.grid(row=i, column=1, pady=8)
+            entries["Gender"] = gender_cb
+        else:
+            show_val = "*" if label_text == "Password" else ""
+            entry = tk.Entry(card, font=("Arial", 12), width=28, show=show_val)
+            entry.grid(row=i, column=1, pady=8)
+            entries[label_text] = entry
+
+    feedback = tk.Label(card, text="", font=("Arial", 10), bg=CARD_COLOR, fg="red")
+    feedback.grid(row=5, column=0, columnspan=2, pady=5)
+
+    def register():
+        full_name = entries["Full Name"].get().strip()
+        age = entries["Age"].get().strip()
+        gender = entries["Gender"].get().strip()
+        username = entries["Username"].get().strip()
+        password = entries["Password"].get().strip()
+
+        if not all([full_name, age, gender, username, password]):
+            feedback.config(text="Please complete all fields.")
+            return
+
+        if not age.isdigit():
+            feedback.config(text="Age must be a number.")
+            return
+
+        ok, msg = create_user(username, password, full_name, int(age), gender)
+        if ok:
+            messagebox.showinfo("Success", msg)
+            login()
+        else:
+            feedback.config(text=msg)
+
+    btn_frame = tk.Frame(card, bg=CARD_COLOR)
+    btn_frame.grid(row=6, column=0, columnspan=2, pady=15)
+    make_button(btn_frame, "Create Account", register).grid(row=0, column=0, padx=8)
+    make_button(btn_frame, "Back", login).grid(row=0, column=1, padx=8)
+
+# =========================================================
+# DASHBOARD -> home()
+# =========================================================
+def home():
+    clear()
+    make_title("MedRemind Dashboard")
+
+    user_info = tk.Frame(root, bg=CARD_COLOR, padx=20, pady=15)
+    user_info.pack(pady=10, fill="x", padx=40)
+
+    tk.Label(
+        user_info,
+        text=f"Welcome, {current_user['full_name']}",
+        font=("Arial", 16, "bold"),
+        bg=CARD_COLOR,
+        fg=HEADER_COLOR
+    ).pack(anchor="w")
+
+    meds = get_medications_db(current_user["id"])
+    apps = get_appointments_db(current_user["id"])
+
+    next_med = meds[0][1] if meds else "No medication yet"
+    next_app = f"Dr. {apps[0][1]} - {apps[0][3]} {apps[0][4]}" if apps else "No appointment yet"
+
+    tk.Label(
+        user_info,
+        text=f"Latest Medication: {next_med}",
+        font=("Arial", 11),
+        bg=CARD_COLOR
+    ).pack(anchor="w", pady=3)
+
+    tk.Label(
+        user_info,
+        text=f"Latest Appointment: {next_app}",
+        font=("Arial", 11),
+        bg=CARD_COLOR
+    ).pack(anchor="w", pady=3)
+
+    menu = tk.Frame(root, bg=BG_COLOR)
+    menu.pack(pady=25)
+
+    make_button(menu, "Medications", manage_medications, 20).grid(row=0, column=0, padx=10, pady=10)
+    make_button(menu, "Appointments", manage_appointments, 20).grid(row=0, column=1, padx=10, pady=10)
+    make_button(menu, "Profile", profile, 20).grid(row=1, column=0, padx=10, pady=10)
+    make_button(menu, "Logout", logout, 20).grid(row=1, column=1, padx=10, pady=10)
+
+# =========================================================
+# MEDICATIONS -> manage_medications()
+# =========================================================
+def manage_medications():
+    clear()
+    make_title("Medication Tracker")
+
+    selected_med_id = tk.StringVar(value="")
+
+    top = tk.Frame(root, bg=BG_COLOR)
+    top.pack(fill="x", padx=20)
+
+    form = tk.LabelFrame(top, text="Medication Form", bg=CARD_COLOR, padx=15, pady=15, font=("Arial", 11, "bold"))
+    form.pack(side="left", fill="y", padx=10, pady=10)
+
+    tk.Label(form, text="Medicine Name", bg=CARD_COLOR).grid(row=0, column=0, sticky="w", pady=6)
+    medicine_name_entry = tk.Entry(form, width=28)
+    medicine_name_entry.grid(row=0, column=1, pady=6)
+
+    tk.Label(form, text="Dosage", bg=CARD_COLOR).grid(row=1, column=0, sticky="w", pady=6)
+    dosage_entry = tk.Entry(form, width=28)
+    dosage_entry.grid(row=1, column=1, pady=6)
+
+    tk.Label(form, text="Time", bg=CARD_COLOR).grid(row=2, column=0, sticky="w", pady=6)
+    time_entry = tk.Entry(form, width=28)
+    time_entry.grid(row=2, column=1, pady=6)
+
+    tk.Label(form, text="Instructions", bg=CARD_COLOR).grid(row=3, column=0, sticky="w", pady=6)
+    instructions_entry = tk.Entry(form, width=28)
+    instructions_entry.grid(row=3, column=1, pady=6)
+
+    feedback = tk.Label(form, text="", bg=CARD_COLOR, fg="red")
+    feedback.grid(row=4, column=0, columnspan=2, pady=6)
+
+    table_frame = tk.LabelFrame(top, text="Medication Records", bg=BG_COLOR, padx=10, pady=10, font=("Arial", 11, "bold"))
+    table_frame.pack(side="right", fill="both", expand=True, padx=10, pady=10)
+
+    columns = ("id", "medicine_name", "dosage", "time", "instructions")
+    tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=16)
+
+    tree.heading("id", text="ID")
+    tree.heading("medicine_name", text="Medicine")
+    tree.heading("dosage", text="Dosage")
+    tree.heading("time", text="Time")
+    tree.heading("instructions", text="Instructions")
+
+    tree.column("id", width=50, anchor="center")
+    tree.column("medicine_name", width=140)
+    tree.column("dosage", width=100)
+    tree.column("time", width=90)
+    tree.column("instructions", width=220)
+
+    tree.pack(fill="both", expand=True)
+
+    def clear_form():
+        selected_med_id.set("")
+        medicine_name_entry.delete(0, tk.END)
+        dosage_entry.delete(0, tk.END)
+        time_entry.delete(0, tk.END)
+        instructions_entry.delete(0, tk.END)
+        feedback.config(text="")
+
+    def load_data():
+        for item in tree.get_children():
+            tree.delete(item)
+        rows = get_medications_db(current_user["id"])
+        for row in rows:
+            tree.insert("", tk.END, values=row)
+
+    def validate_form():
+        if not medicine_name_entry.get().strip():
+            return False, "Medicine name is required."
+        if not dosage_entry.get().strip():
+            return False, "Dosage is required."
+        if not time_entry.get().strip():
+            return False, "Time is required."
+        return True, ""
+
+    def add_record():
+        ok, msg = validate_form()
+        if not ok:
+            feedback.config(text=msg)
+            return
+
+        success, result = add_medication_db(
+            current_user["id"],
+            medicine_name_entry.get().strip(),
+            dosage_entry.get().strip(),
+            time_entry.get().strip(),
+            instructions_entry.get().strip()
+        )
+        if success:
+            load_data()
+            clear_form()
+            messagebox.showinfo("Success", result)
+        else:
+            feedback.config(text=result)
+
+    def update_record():
+        if not selected_med_id.get():
+            feedback.config(text="Select a medication to update.")
+            return
+
+        ok, msg = validate_form()
+        if not ok:
+            feedback.config(text=msg)
+            return
+
+        success, result = update_medication_db(
+            int(selected_med_id.get()),
+            medicine_name_entry.get().strip(),
+            dosage_entry.get().strip(),
+            time_entry.get().strip(),
+            instructions_entry.get().strip()
+        )
+        if success:
+            load_data()
+            clear_form()
+            messagebox.showinfo("Success", result)
+        else:
+            feedback.config(text=result)
+
+    def delete_record():
+        if not selected_med_id.get():
+            feedback.config(text="Select a medication to delete.")
+            return
+
+        confirm = messagebox.askyesno("Confirm Delete", "Delete selected medication?")
+        if not confirm:
+            return
+
+        success, result = delete_medication_db(int(selected_med_id.get()))
+        if success:
+            load_data()
+            clear_form()
+            messagebox.showinfo("Success", result)
+        else:
+            feedback.config(text=result)
+
+    def on_select(event):
+        selected = tree.focus()
+        if not selected:
+            return
+        values = tree.item(selected, "values")
+        if not values:
+            return
+
+        selected_med_id.set(values[0])
+        clear_form()
+        selected_med_id.set(values[0])
+        medicine_name_entry.insert(0, values[1])
+        dosage_entry.insert(0, values[2])
+        time_entry.insert(0, values[3])
+        instructions_entry.insert(0, values[4])
+
+    tree.bind("<<TreeviewSelect>>", on_select)
+
+    btns = tk.Frame(form, bg=CARD_COLOR)
+    btns.grid(row=5, column=0, columnspan=2, pady=10)
+
+    make_button(btns, "Add", add_record, 10).grid(row=0, column=0, padx=4, pady=4)
+    make_button(btns, "Update", update_record, 10).grid(row=0, column=1, padx=4, pady=4)
+    make_button(btns, "Delete", delete_record, 10).grid(row=0, column=2, padx=4, pady=4)
+    make_button(btns, "Clear", clear_form, 10).grid(row=1, column=0, padx=4, pady=4)
+    make_button(btns, "Back", home, 10).grid(row=1, column=1, padx=4, pady=4)
+
+    load_data()
+
+# =========================================================
+# APPOINTMENTS -> manage_appointments()
+# =========================================================
+def manage_appointments():
+    clear()
+    make_title("Appointments")
+
+    selected_app_id = tk.StringVar(value="")
+
+    top = tk.Frame(root, bg=BG_COLOR)
+    top.pack(fill="x", padx=20)
+
+    form = tk.LabelFrame(top, text="Appointment Form", bg=CARD_COLOR, padx=15, pady=15, font=("Arial", 11, "bold"))
+    form.pack(side="left", fill="y", padx=10, pady=10)
+
+    tk.Label(form, text="Doctor Name", bg=CARD_COLOR).grid(row=0, column=0, sticky="w", pady=6)
+    doctor_entry = tk.Entry(form, width=28)
+    doctor_entry.grid(row=0, column=1, pady=6)
+
+    tk.Label(form, text="Clinic", bg=CARD_COLOR).grid(row=1, column=0, sticky="w", pady=6)
+    clinic_entry = tk.Entry(form, width=28)
+    clinic_entry.grid(row=1, column=1, pady=6)
+
+    tk.Label(form, text="Date (YYYY-MM-DD)", bg=CARD_COLOR).grid(row=2, column=0, sticky="w", pady=6)
+    date_entry = tk.Entry(form, width=28)
+    date_entry.grid(row=2, column=1, pady=6)
+
+    tk.Label(form, text="Time", bg=CARD_COLOR).grid(row=3, column=0, sticky="w", pady=6)
+    time_entry = tk.Entry(form, width=28)
+    time_entry.grid(row=3, column=1, pady=6)
+
+    tk.Label(form, text="Purpose", bg=CARD_COLOR).grid(row=4, column=0, sticky="w", pady=6)
+    purpose_entry = tk.Entry(form, width=28)
+    purpose_entry.grid(row=4, column=1, pady=6)
+
+    feedback = tk.Label(form, text="", bg=CARD_COLOR, fg="red")
+    feedback.grid(row=5, column=0, columnspan=2, pady=6)
+
+    table_frame = tk.LabelFrame(top, text="Appointment Records", bg=BG_COLOR, padx=10, pady=10, font=("Arial", 11, "bold"))
+    table_frame.pack(side="right", fill="both", expand=True, padx=10, pady=10)
+
+    columns = ("id", "doctor_name", "clinic", "date", "time", "purpose")
+    tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=16)
+
+    tree.heading("id", text="ID")
+    tree.heading("doctor_name", text="Doctor")
+    tree.heading("clinic", text="Clinic")
+    tree.heading("date", text="Date")
+    tree.heading("time", text="Time")
+    tree.heading("purpose", text="Purpose")
+
+    tree.column("id", width=50, anchor="center")
+    tree.column("doctor_name", width=130)
+    tree.column("clinic", width=120)
+    tree.column("date", width=90)
+    tree.column("time", width=80)
+    tree.column("purpose", width=190)
+
+    tree.pack(fill="both", expand=True)
+
+    def clear_form():
+        selected_app_id.set("")
+        doctor_entry.delete(0, tk.END)
+        clinic_entry.delete(0, tk.END)
+        date_entry.delete(0, tk.END)
+        time_entry.delete(0, tk.END)
+        purpose_entry.delete(0, tk.END)
+        feedback.config(text="")
+
+    def load_data():
+        for item in tree.get_children():
+            tree.delete(item)
+        rows = get_appointments_db(current_user["id"])
+        for row in rows:
+            tree.insert("", tk.END, values=row)
+
+    def validate_form():
+        if not doctor_entry.get().strip():
+            return False, "Doctor name is required."
+        if not clinic_entry.get().strip():
+            return False, "Clinic is required."
+        if not date_entry.get().strip():
+            return False, "Date is required."
+        if not time_entry.get().strip():
+            return False, "Time is required."
+        try:
+            datetime.strptime(date_entry.get().strip(), "%Y-%m-%d")
+        except ValueError:
+            return False, "Date must be YYYY-MM-DD."
+        return True, ""
+
+    def add_record():
+        ok, msg = validate_form()
+        if not ok:
+            feedback.config(text=msg)
+            return
+
+        success, result = add_appointment_db(
+            current_user["id"],
+            doctor_entry.get().strip(),
+            clinic_entry.get().strip(),
+            date_entry.get().strip(),
+            time_entry.get().strip(),
+            purpose_entry.get().strip()
+        )
+        if success:
+            load_data()
+            clear_form()
+            messagebox.showinfo("Success", result)
+        else:
+            feedback.config(text=result)
+
+    def update_record():
+        if not selected_app_id.get():
+            feedback.config(text="Select an appointment to update.")
+            return
+
+        ok, msg = validate_form()
+        if not ok:
+            feedback.config(text=msg)
+            return
+
+        success, result = update_appointment_db(
+            int(selected_app_id.get()),
+            doctor_entry.get().strip(),
+            clinic_entry.get().strip(),
+            date_entry.get().strip(),
+            time_entry.get().strip(),
+            purpose_entry.get().strip()
+        )
+        if success:
+            load_data()
+            clear_form()
+            messagebox.showinfo("Success", result)
+        else:
+            feedback.config(text=result)
+
+    def delete_record():
+        if not selected_app_id.get():
+            feedback.config(text="Select an appointment to delete.")
+            return
+
+        confirm = messagebox.askyesno("Confirm Delete", "Delete selected appointment?")
+        if not confirm:
+            return
+
+        success, result = delete_appointment_db(int(selected_app_id.get()))
+        if success:
+            load_data()
+            clear_form()
+            messagebox.showinfo("Success", result)
+        else:
+            feedback.config(text=result)
+
+    def on_select(event):
+        selected = tree.focus()
+        if not selected:
+            return
+        values = tree.item(selected, "values")
+        if not values:
+            return
+
+        clear_form()
+        selected_app_id.set(values[0])
+        doctor_entry.insert(0, values[1])
+        clinic_entry.insert(0, values[2])
+        date_entry.insert(0, values[3])
+        time_entry.insert(0, values[4])
+        purpose_entry.insert(0, values[5])
+
+    tree.bind("<<TreeviewSelect>>", on_select)
+
+    btns = tk.Frame(form, bg=CARD_COLOR)
+    btns.grid(row=6, column=0, columnspan=2, pady=10)
+
+    make_button(btns, "Add", add_record, 10).grid(row=0, column=0, padx=4, pady=4)
+    make_button(btns, "Update", update_record, 10).grid(row=0, column=1, padx=4, pady=4)
+    make_button(btns, "Delete", delete_record, 10).grid(row=0, column=2, padx=4, pady=4)
+    make_button(btns, "Clear", clear_form, 10).grid(row=1, column=0, padx=4, pady=4)
+    make_button(btns, "Back", home, 10).grid(row=1, column=1, padx=4, pady=4)
+
+    load_data()
+
+# =========================================================
+# PROFILE -> profile()
+# =========================================================
+def profile():
+    clear()
+    make_title("Profile")
+
+    user = get_user_by_id(current_user["id"])
+    if not user:
+        messagebox.showerror("Error", "User not found.")
+        home()
+        return
+
+    card = tk.Frame(root, bg=CARD_COLOR, padx=35, pady=35)
+    card.pack(pady=25)
+
+    info = [
+        ("Full Name", user["full_name"]),
+        ("Username", user["username"]),
+        ("Age", user["age"]),
+        ("Gender", user["gender"]),
+    ]
+
+    for i, (label_text, value) in enumerate(info):
+        tk.Label(card, text=f"{label_text}:", font=("Arial", 12, "bold"), bg=CARD_COLOR).grid(row=i, column=0, sticky="w", pady=8, padx=10)
+        tk.Label(card, text=f"{value}", font=("Arial", 12), bg=CARD_COLOR).grid(row=i, column=1, sticky="w", pady=8, padx=10)
+
+    make_button(card, "Back", home, 12).grid(row=len(info), column=0, columnspan=2, pady=20)
+
+# =========================================================
+# LOGOUT
+# =========================================================
+def logout():
+    global current_user
+    current_user = None
+    login()
+
+# =========================================================
+# START
+# =========================================================
+if __name__ == "__main__":
+    initialize_database()
+    login()
+    root.mainloop()
